@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Chi Paga il Caffè?</title>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Caffè"/>
+<meta name="theme-color" content="#F5F3F0"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:#F5F3F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1A1008;overscroll-behavior:none;}
+button,input{font-family:inherit;}
+button{cursor:pointer;}
+input{outline:none;}
+#root{max-width:480px;margin:0 auto;min-height:100vh;position:relative;}
+.screen{padding:0 16px 100px;padding-top:env(safe-area-inset-top,0px);}
+
+/* Tab bar */
+#tabbar{position:fixed;bottom:0;left:0;right:0;background:rgba(250,247,244,0.95);backdrop-filter:blur(12px);border-top:1px solid #EBE5DF;display:flex;z-index:50;padding-bottom:env(safe-area-inset-bottom,8px);}
+#tabbar button{flex:1;padding:10px 0 6px;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;}
+#tabbar button .icon{font-size:22px;opacity:0.4;}
+#tabbar button .label{font-size:10px;color:#A8978C;letter-spacing:0.3px;}
+#tabbar button.active .icon{opacity:1;}
+#tabbar button.active .label{color:#C8782A;font-weight:700;}
+
+/* Overlay */
+#overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(44,21,3,0.96);flex-direction:column;align-items:center;justify-content:center;gap:0;}
+#overlay.show{display:flex;}
+.spin-circle{width:220px;height:220px;border-radius:110px;border:3px solid #C8782A;display:flex;align-items:center;justify-content:center;position:relative;background:rgba(200,120,42,0.06);}
+.spin-name{font-size:36px;font-weight:800;color:#FAF7F4;text-align:center;padding:0 20px;max-width:200px;line-height:1.1;}
+.spin-dot{position:absolute;width:10px;height:10px;border-radius:5px;background:#C8782A;top:-5px;left:50%;margin-left:-5px;transform-origin:5px 115px;animation:orbit .5s linear infinite;}
+@keyframes orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* People grid */
+.people-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.person-btn{background:#fff;border:2px solid #EBE5DF;border-radius:16px;padding:12px 14px;text-align:left;box-shadow:0 2px 12px rgba(44,21,3,0.08);transition:all .15s;display:flex;align-items:center;gap:10px;width:100%;}
+.person-btn.sel{background:#2C1503;border-color:#2C1503;box-shadow:0 4px 16px rgba(44,21,3,0.25);}
+.person-btn .pname{font-size:15px;font-weight:700;color:#1A1008;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.person-btn.sel .pname{color:#fff;}
+.person-btn .psub{font-size:11px;color:#A8978C;margin-top:1px;}
+.person-btn.sel .psub{color:rgba(255,255,255,0.55);}
+
+/* Avatar */
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+
+/* Cards */
+.card{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 2px 12px rgba(44,21,3,0.08);border:1px solid #EBE5DF;margin-top:14px;}
+
+/* Stat mini cards */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.stat-cell{background:#FAF7F4;border-radius:12px;padding:10px 8px;text-align:center;}
+
+/* Session row */
+.sess-row{display:flex;align-items:center;gap:10px;padding:10px 0;}
+.sess-row+.sess-row{border-top:1px solid #EBE5DF;}
+
+/* Highlight cards */
+.hilights{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px;}
+.hicard{background:#fff;border-radius:18px;padding:16px;box-shadow:0 2px 12px rgba(44,21,3,0.08);border:1px solid #EBE5DF;flex:1 1 140px;}
+
+/* Input row */
+.input-row{display:flex;gap:8px;margin-top:10px;}
+.input-row input{flex:1;background:#fff;border:1.5px solid #EBE5DF;border-radius:12px;padding:11px 14px;font-size:14px;color:#1A1008;}
+.btn-add{background:#F5E6D3;border:none;border-radius:12px;padding:11px 16px;color:#C8782A;font-size:14px;font-weight:600;}
+
+/* CTA */
+#cta{width:100%;margin-top:20px;border:none;border-radius:18px;padding:18px;font-size:18px;font-weight:800;background:#EBE5DF;color:#A8978C;}
+#cta.ready{background:linear-gradient(135deg,#2C1503,#5C3010);color:#fff;box-shadow:0 6px 24px rgba(44,21,3,0.3);}
+
+/* Label styles */
+.section-label{font-size:12px;font-weight:600;color:#A8978C;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="screen-draw" class="screen"></div>
+  <div id="screen-stats" class="screen" style="display:none"></div>
+  <div id="screen-people" class="screen" style="display:none"></div>
+  <div id="tabbar">
+    <button class="active" onclick="showTab('draw')"><span class="icon">☕</span><span class="label">Sorteggio</span></button>
+    <button onclick="showTab('stats')"><span class="icon">🏆</span><span class="label">Classifiche</span></button>
+    <button onclick="showTab('people')"><span class="icon">👤</span><span class="label">Persone</span></button>
+  </div>
+  <div id="overlay">
+    <div id="ov-spin" style="display:none;flex-direction:column;align-items:center;gap:0">
+      <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:32px">estrazione in corso</div>
+      <div class="spin-circle">
+        <div class="spin-name" id="spin-name">...</div>
+        <div class="spin-dot"></div>
+      </div>
+    </div>
+    <div id="ov-result" style="display:none;flex-direction:column;align-items:center;gap:0;padding:24px">
+      <div style="font-size:56px;margin-bottom:8px">😭</div>
+      <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">il verdetto è...</div>
+      <div id="res-name" style="font-size:48px;font-weight:900;color:#C8782A;text-align:center;padding:16px 32px;border:2px solid #C8782A;border-radius:20px;margin-bottom:16px;max-width:300px"></div>
+      <div id="res-others" style="font-size:16px;color:#C8A88A;text-align:center;margin-bottom:16px;max-width:280px;line-height:1.4"></div>
+      <div id="res-guests" style="display:none;background:rgba(200,120,42,0.15);border-radius:12px;padding:10px 20px;margin-bottom:24px;font-size:14px;color:#D4A070;text-align:center"></div>
+      <div id="res-spacer" style="margin-bottom:24px"></div>
+      <button onclick="confirmPay()" style="background:#C8782A;color:#fff;border:none;border-radius:16px;padding:16px 48px;font-size:17px;font-weight:700;margin-bottom:12px">✅ Confermato, ha pagato!</button>
+      <button onclick="cancelDraw()" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#9A7A60;border-radius:12px;padding:10px 28px;font-size:14px">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const KEY = "caffe-v2";
+function loadState(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch{return null;}}
+function saveState(){try{localStorage.setItem(KEY,JSON.stringify(ST));}catch{}}
+
+const DEFAULT_PEOPLE=[{id:"1",name:"Marco"},{id:"2",name:"Giulia"},{id:"3",name:"Luca"},{id:"4",name:"Sara"}];
+let ST = loadState() || {people:DEFAULT_PEOPLE,stats:{},sessions:[]};
+
+let selected = [];
+let guestCount = 0;
+let currentWinner = null;
+let spinTimer = null;
+let currentTab = "draw";
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function $(id){return document.getElementById(id);}
+function personName(id){const p=ST.people.find(x=>x.id===id);return p?p.name:"?";}
+function daysSince(d){if(!d)return null;return Math.floor((Date.now()-new Date(d).getTime())/86400000);}
+
+const AVATAR_COLORS=["#E8C5A0","#B5D4C8","#C8B5D4","#D4C8B5","#B5C8D4","#D4B5C8"];
+function avatarColor(name){return AVATAR_COLORS[name.charCodeAt(0)%AVATAR_COLORS.length];}
+function avatarHTML(name,size,highlight){
+  const bg=highlight?"#C8782A":avatarColor(name);
+  const col=highlight?"#fff":"#2C1503";
+  const border=highlight?`border:2px solid #C8782A;`:"";
+  return `<div class="avatar" style="width:${size}px;height:${size}px;font-size:${size*.38}px;background:${bg};color:${col};${border}">${name[0].toUpperCase()}</div>`;
+}
+
+// ── Pick payer ─────────────────────────────────────────────────────────────
+function pickPayer(ids, gc){
+  const share = ids.length>0 ? gc/ids.length : 0;
+  const ws = ids.map(id=>{
+    const s=ST.stats[id]||{takenFrac:0,paidFrac:0,taken:0,paidRounds:0};
+    const tf=s.takenFrac!=null?s.takenFrac:s.taken;
+    const pf=s.paidFrac!=null?s.paidFrac:s.paidRounds;
+    return {id,w:Math.max(0.5,tf-pf+share)};
+  });
+  const tot=ws.reduce((a,b)=>a+b.w,0);
+  let r=Math.random()*tot;
+  for(const w of ws){r-=w.w;if(r<=0)return w.id;}
+  return ws[ws.length-1].id;
+}
+
+// ── Delete session ─────────────────────────────────────────────────────────
+function deleteSession(sid){
+  const session=ST.sessions.find(s=>s.id===sid);
+  if(!session)return;
+  const guests=session.guestCount||0;
+  const share=session.participants.length>0?guests/session.participants.length:0;
+  session.participants.forEach(id=>{
+    if(!ST.stats[id])return;
+    ST.stats[id]={...ST.stats[id],
+      taken:Math.max(0,ST.stats[id].taken-1),
+      takenFrac:Math.max(0,(ST.stats[id].takenFrac!=null?ST.stats[id].takenFrac:ST.stats[id].taken)-(1+share))
+    };
+  });
+  const payer=session.payer;
+  if(ST.stats[payer]){
+    const tp=session.totalCoffees||session.count;
+    ST.stats[payer]={...ST.stats[payer],
+      paidRounds:Math.max(0,ST.stats[payer].paidRounds-1),
+      paidFrac:Math.max(0,(ST.stats[payer].paidFrac!=null?ST.stats[payer].paidFrac:ST.stats[payer].paidRounds)-tp),
+      lastPaidSession:ST.sessions.filter(s=>s.id!==sid&&s.payer===payer)[0]?.id||null
+    };
+  }
+  ST.sessions=ST.sessions.filter(s=>s.id!==sid);
+  saveState();
+  renderAll();
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function showTab(tab){
+  currentTab=tab;
+  ["draw","stats","people"].forEach(t=>{
+    $("screen-"+t).style.display=t===tab?"block":"none";
+  });
+  document.querySelectorAll("#tabbar button").forEach((b,i)=>{
+    b.className=["draw","stats","people"][i]===tab?"active":"";
+  });
+  if(tab==="stats")renderStats();
+  if(tab==="people")renderPeople();
+}
+
+// ── Draw Screen ────────────────────────────────────────────────────────────
+function renderDraw(){
+  const el=$("screen-draw");
+  let html=`
+  <div style="padding-top:20px;padding-bottom:8px;text-align:center">
+    <div style="font-size:13px;color:#A8978C;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px">il rituale quotidiano</div>
+    <div style="font-size:28px;font-weight:800;color:#2C1503;letter-spacing:-0.5px">Chi Paga il Caffè?</div>
+  </div>
+  <div style="margin-top:20px">
+    <div class="section-label">Chi è presente oggi?</div>
+    <div class="people-grid">`;
+
+  ST.people.forEach(p=>{
+    const sel=selected.includes(p.id);
+    const s=ST.stats[p.id]||{taken:0,paidRounds:0};
+    const debt=s.taken-s.paidRounds;
+    const sub=s.taken===0?"nuovo":`${s.taken} caffè · ${debt>0?`deve ${debt}`:"in pari"}`;
+    html+=`<button class="person-btn${sel?" sel":""}" onclick="togglePerson('${p.id}')">
+      ${avatarHTML(p.name,38,sel)}
+      <div style="flex:1;min-width:0">
+        <div class="pname">${p.name}</div>
+        <div class="psub">${sub}</div>
+      </div>
+      ${sel?'<span style="font-size:16px">✓</span>':""}
+    </button>`;
+  });
+
+  html+=`</div>
+    <div class="input-row">
+      <input id="inp-add" placeholder="Ospite di oggi..." onkeydown="if(event.key==='Enter')addTemp()"/>
+      <button class="btn-add" onclick="addTemp()">+ Aggiungi</button>
+    </div>
+  </div>`;
+
+  // Guest counter
+  if(selected.length>=1){
+    const sub=guestCount===0?"Nessun ospite — tocca + per aggiungere":`${guestCount} caffè extra divisi tra i ${selected.length} presenti`;
+    html+=`<div class="card" style="border:1.5px solid ${guestCount>0?"#C8782A":"#EBE5DF"}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px;flex-shrink:0">👥</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:#1A1008">Caffè per ospiti</div>
+          <div style="font-size:11px;color:#A8978C;margin-top:1px">${sub}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0">
+          <button onclick="changeGuest(-1)" style="width:34px;height:34px;border-radius:10px;border:none;background:${guestCount===0?"#EBE5DF":"#F5E6D3"};color:${guestCount===0?"#A8978C":"#C8782A"};font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center">−</button>
+          <div style="width:36px;text-align:center;font-size:20px;font-weight:800;color:${guestCount>0?"#C8782A":"#A8978C"}">${guestCount}</div>
+          <button onclick="changeGuest(1)" style="width:34px;height:34px;border-radius:10px;border:none;background:#F5E6D3;color:#C8782A;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center">+</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // CTA
+  const ready=selected.length>=2;
+  const label=ready?`☕ Estrai tra ${selected.length} persone${guestCount>0?` + ${guestCount} ospiti`:""}` :"Seleziona almeno 2 persone";
+  html+=`<button id="cta" class="${ready?"ready":""}" onclick="startDraw()">${label}</button>`;
+
+  // Last session
+  if(ST.sessions[0]){
+    const s=ST.sessions[0];
+    const pn=personName(s.payer);
+    const tot=s.totalCoffees||s.count;
+    const gc=s.guestCount||0;
+    html+=`<div style="margin-top:16px;background:#FAF7F4;border-radius:14px;padding:12px 14px;border:1px solid #EBE5DF;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🕐</span>
+      <div style="flex:1">
+        <div style="font-size:12px;color:#A8978C">Ultima volta · ${s.date} ${s.time}</div>
+        <div style="font-size:14px;color:#1A1008;font-weight:600;margin-top:1px">${pn} ha offerto ${tot} caffè${gc>0?` <span style="font-weight:400;color:#A8978C">(di cui ${gc} ospiti)</span>`:""}</div>
+      </div>
+      <button onclick="askDelete('${s.id}')" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600">↩ Annulla</button>
+    </div>`;
+  }
+
+  el.innerHTML=html;
+}
+
+function togglePerson(id){
+  const i=selected.indexOf(id);
+  if(i>=0)selected.splice(i,1); else selected.push(id);
+  renderDraw();
+}
+
+function changeGuest(d){
+  guestCount=Math.max(0,guestCount+d);
+  renderDraw();
+}
+
+function addTemp(){
+  const inp=$("inp-add");
+  const n=(inp?inp.value:"").trim();
+  if(!n)return;
+  const id="tmp_"+Date.now();
+  ST.people.push({id,name:n});
+  selected.push(id);
+  saveState();
+  renderDraw();
+}
+
+function askDelete(sid){
+  const s=ST.sessions.find(x=>x.id===sid);
+  if(!s)return;
+  if(confirm(`Annullare l'ultima sessione?\n${personName(s.payer)} ha offerto il caffè`)){
+    deleteSession(sid);
+  }
+}
+
+// ── Spin animation ─────────────────────────────────────────────────────────
+function startDraw(){
+  if(selected.length<2)return;
+  const winnerId=pickPayer(selected,guestCount);
+  currentWinner=winnerId;
+  const names=selected.map(id=>personName(id));
+  const delays=[60,60,70,80,90,110,140,180,230,290,360,440,520,600];
+  let i=0;
+  $("ov-spin").style.display="flex";
+  $("ov-result").style.display="none";
+  $("overlay").classList.add("show");
+
+  function tick(){
+    $("spin-name").textContent=names[i%names.length];
+    i++;
+    if(i<=delays.length){
+      spinTimer=setTimeout(tick,delays[i-1]||600);
+    } else {
+      $("spin-name").textContent=personName(winnerId);
+      setTimeout(showResult,300);
+    }
+  }
+  tick();
+}
+
+function showResult(){
+  const wn=personName(currentWinner);
+  const others=selected.filter(id=>id!==currentWinner).map(personName).join(", ");
+  const gc=guestCount;
+  const tot=selected.length+gc;
+  $("res-name").textContent=wn;
+  $("res-others").innerHTML=`offre ☕ a ${others}`;
+  if(gc>0){
+    $("res-guests").textContent=`+ ${gc} caffè ospiti · ${tot} in totale`;
+    $("res-guests").style.display="block";
+    $("res-spacer").style.display="none";
+  } else {
+    $("res-guests").style.display="none";
+    $("res-spacer").style.display="block";
+  }
+  $("ov-spin").style.display="none";
+  $("ov-result").style.display="flex";
+}
+
+function confirmPay(){
+  const winnerId=currentWinner;
+  const count=selected.length;
+  const guests=guestCount;
+  const now=new Date().toISOString();
+  const share=guests/count;
+  selected.forEach(id=>{
+    if(!ST.stats[id])ST.stats[id]={taken:0,paidRounds:0,takenFrac:0,paidFrac:0,lastPaidSession:null};
+    ST.stats[id].taken++;
+    ST.stats[id].takenFrac=(ST.stats[id].takenFrac||0)+1+share;
+  });
+  ST.stats[winnerId].paidRounds++;
+  ST.stats[winnerId].paidFrac=(ST.stats[winnerId].paidFrac||0)+count+guests;
+  ST.stats[winnerId].lastPaidSession=now;
+  ST.sessions.unshift({
+    id:now,
+    date:new Date().toLocaleDateString("it-IT"),
+    time:new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}),
+    participants:[...selected],payer:winnerId,
+    count,guestCount:guests,totalCoffees:count+guests
+  });
+  if(ST.sessions.length>100)ST.sessions.pop();
+  saveState();
+  $("overlay").classList.remove("show");
+  selected=[];
+  guestCount=0;
+  currentWinner=null;
+  renderDraw();
+}
+
+function cancelDraw(){
+  clearTimeout(spinTimer);
+  $("overlay").classList.remove("show");
+}
+
+// ── Stats Screen ───────────────────────────────────────────────────────────
+function funnyTitle(debt){
+  if(debt>=5)return "🦹 Il Grande Furbetto";
+  if(debt>=3)return "😅 Sta Esagerando";
+  if(debt>=1)return "👀 Occhio...";
+  if(debt<=-3)return "😇 Santo Patrono del Caffè";
+  if(debt===0)return "⚖️ In Perfetto Equilibrio";
+  return "✅ Quasi a Posto";
+}
+
+function renderStats(){
+  const el=$("screen-stats");
+  if(ST.sessions.length===0){
+    el.innerHTML=`<div style="padding:60px 24px;text-align:center"><div style="font-size:48px;margin-bottom:12px">☕</div><div style="font-size:17px;color:#6B5B4E">Nessuna sessione ancora.</div><div style="font-size:14px;color:#A8978C;margin-top:6px">Fai il primo sorteggio!</div></div>`;
+    return;
+  }
+  const sorted=ST.people
+    .filter(p=>ST.stats[p.id]?.taken>0)
+    .map(p=>{
+      const s=ST.stats[p.id]||{taken:0,paidRounds:0,lastPaidSession:null};
+      return {...p,s,debt:s.taken-s.paidRounds,days:daysSince(s.lastPaidSession)};
+    })
+    .sort((a,b)=>b.debt-a.debt);
+
+  const mostDebt=sorted[0];
+  const mostGen=[...sorted].sort((a,b)=>b.s.paidRounds-a.s.paidRounds)[0];
+  const longest=[...sorted].filter(p=>p.days!==null).sort((a,b)=>b.days-a.days)[0];
+  const mostCaf=[...sorted].sort((a,b)=>b.s.taken-a.s.taken)[0];
+
+  function hicard(emoji,title,value,sub,color){
+    return `<div class="hicard"><div style="font-size:28px;margin-bottom:4px">${emoji}</div><div style="font-size:11px;color:#A8978C;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px">${title}</div><div style="font-size:20px;font-weight:800;color:${color}">${value}</div>${sub?`<div style="font-size:12px;color:#A8978C;margin-top:2px">${sub}</div>`:""}</div>`;
+  }
+
+  let html=`<div style="padding-top:20px">
+  <div style="font-size:22px;font-weight:800;color:#2C1503;margin-bottom:4px">🏆 Classifiche</div>
+  <div style="font-size:13px;color:#A8978C;margin-bottom:20px">${ST.sessions.length} sessioni registrate</div>
+  <div class="hilights">
+    ${mostDebt?hicard("😬","Più in debito",mostDebt.name,`deve ancora ${mostDebt.debt} giro${mostDebt.debt!==1?"i":""}`, "#D94F38"):""}
+    ${mostGen?hicard("🤑","Più generoso",mostGen.name,`ha pagato ${mostGen.s.paidRounds} volte`,"#2E8B57"):""}
+    ${longest&&longest.days!==null?hicard("🏃","Scappato da",`${longest.days}gg`,longest.name,"#C8782A"):""}
+    ${mostCaf?hicard("☕","Più caffeìnomane",mostCaf.name,`${mostCaf.s.taken} caffè presi`,"#2C1503"):""}
+  </div>
+  <div class="section-label">Schede personali</div>
+  <div style="display:flex;flex-direction:column;gap:12px">`;
+
+  sorted.forEach(p=>{
+    const debtColor=p.debt>0?"#D94F38":p.debt<0?"#2E8B57":"#C8782A";
+    const debtBg=p.debt>0?"#FEF0EC":p.debt<0?"#EBF5EF":"#F5E6D3";
+    const debtLabel=p.debt>0?`-${p.debt}`:p.debt<0?`+${Math.abs(p.debt)}`:"0";
+    const titleColor=p.debt>=3?"#D94F38":p.debt<=-2?"#2E8B57":"#6B5B4E";
+    const lastLabel=p.days===null?"Mai pagato!":p.days===0?"oggi!": `${p.days}gg fa`;
+    const lastVal=p.days===null?"😇":p.days===0?"":"";
+
+    let extra="";
+    if(p.days!==null&&p.days>7)extra+=`<div style="margin-top:10px;background:#FEF6EC;border-radius:10px;padding:8px 12px;font-size:12px;color:#A05A10">😱 Non paga da <strong>${p.days} giorni</strong>! Qualcuno lo fermi.</div>`;
+    if(p.debt>=5)extra+=`<div style="margin-top:10px;background:#FEF0EC;border-radius:10px;padding:8px 12px;font-size:12px;color:#D94F38">🚨 Deve ancora ${p.debt} turni. La fortuna ha occhi ovunque.</div>`;
+    if(p.debt<=-3)extra+=`<div style="margin-top:10px;background:#EBF5EF;border-radius:10px;padding:8px 12px;font-size:12px;color:#2E8B57">😇 Ha pre-pagato ${Math.abs(p.debt)} caffè. È praticamente un santo.</div>`;
+
+    html+=`<div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 12px rgba(44,21,3,0.08);border:1px solid ${p.debt>=3?"#F5C5BB":"#EBE5DF"}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        ${avatarHTML(p.name,44,false)}
+        <div style="flex:1">
+          <div style="font-size:17px;font-weight:700;color:#1A1008">${p.name}</div>
+          <div style="font-size:13px;color:${titleColor};font-weight:600">${funnyTitle(p.debt)}</div>
+        </div>
+        <div style="background:${debtBg};color:${debtColor};border-radius:10px;padding:4px 10px;font-size:13px;font-weight:800">${debtLabel}</div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-cell"><div style="font-size:11px;color:#A8978C;margin-bottom:2px">Caffè presi</div><div style="font-size:16px;font-weight:700;color:#2C1503">☕ ${p.s.taken}</div></div>
+        <div class="stat-cell"><div style="font-size:11px;color:#A8978C;margin-bottom:2px">Ha pagato</div><div style="font-size:16px;font-weight:700;color:#2C1503">💳 ${p.s.paidRounds}×</div></div>
+        <div class="stat-cell"><div style="font-size:11px;color:#A8978C;margin-bottom:2px">${lastLabel}</div><div style="font-size:16px;font-weight:700;color:#2C1503">📅 ${lastVal}</div></div>
+      </div>
+      ${extra}
+    </div>`;
+  });
+
+  html+=`</div><div style="margin-top:28px"><div class="section-label">Ultime sessioni</div>`;
+  ST.sessions.slice(0,15).forEach((s,i)=>{
+    const pn=personName(s.payer);
+    const others=s.participants.filter(id=>id!==s.payer).map(personName).join(", ");
+    const gc=s.guestCount||0;
+    html+=`<div class="sess-row">
+      ${avatarHTML(pn,32,false)}
+      <div style="flex:1;min-width:0">
+        <span style="font-weight:700;color:#1A1008;font-size:14px">${pn}</span>
+        <span style="color:#6B5B4E;font-size:14px"> → ${others}</span>
+        <div style="font-size:11px;color:#A8978C;margin-top:1px">${s.date} · ${s.time}${gc>0?` · <span style="color:#C8782A">+${gc} ospiti</span>`:""}</div>
+      </div>
+      <button onclick="askDeleteStats('${s.id}','${pn}','${others}')" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:8px;padding:5px 10px;font-size:13px;flex-shrink:0">↩</button>
+    </div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function askDeleteStats(sid,pn,others){
+  if(confirm(`Annullare questa sessione?\n${pn} ha offerto a ${others}`)){
+    deleteSession(sid);
+    renderStats();
+  }
+}
+
+// ── People Screen ──────────────────────────────────────────────────────────
+function renderPeople(){
+  const el=$("screen-people");
+  let html=`<div style="padding-top:20px">
+  <div style="font-size:22px;font-weight:800;color:#2C1503;margin-bottom:4px">👤 Persone</div>
+  <div style="font-size:13px;color:#A8978C;margin-bottom:20px">Tocca ✏️ per modificare il nome</div>
+  <div style="display:flex;flex-direction:column;gap:8px">`;
+
+  ST.people.forEach(p=>{
+    const s=ST.stats[p.id]||{taken:0,paidRounds:0};
+    html+=`<div style="background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 2px 12px rgba(44,21,3,0.08);border:1.5px solid #EBE5DF;display:flex;align-items:center;gap:12px">
+      ${avatarHTML(p.name,40,false)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:600;color:#1A1008">${p.name}</div>
+        <div style="font-size:11px;color:#A8978C;margin-top:1px">${s.taken} caffè presi · ${s.paidRounds} volte ha pagato</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="startEdit('${p.id}')" style="background:#F5E6D3;color:#C8782A;border:none;border-radius:10px;padding:6px 12px;font-size:13px">✏️</button>
+        <button onclick="removePerson('${p.id}')" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:10px;padding:6px 12px;font-size:13px">🗑</button>
+      </div>
+    </div>`;
+  });
+
+  html+=`</div>
+  <div class="input-row" style="margin-top:16px">
+    <input id="inp-new" placeholder="Nome nuovo membro..." onkeydown="if(event.key==='Enter')addPerson()"/>
+    <button onclick="addPerson()" style="background:#2C1503;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:600">+</button>
+  </div>
+  <button onclick="resetAll()" style="margin-top:32px;width:100%;background:transparent;border:1px solid #F5C5BB;color:#D94F38;border-radius:12px;padding:12px;font-size:14px">🗑 Azzera tutta la storia</button>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function startEdit(id){
+  const p=ST.people.find(x=>x.id===id);
+  if(!p)return;
+  const newName=prompt("Rinomina:",p.name);
+  if(!newName||!newName.trim())return;
+  p.name=newName.trim();
+  saveState();
+  renderPeople();
+  if(currentTab==="draw")renderDraw();
+}
+
+function removePerson(id){
+  if(!confirm("Rimuovere questa persona?"))return;
+  ST.people=ST.people.filter(p=>p.id!==id);
+  selected=selected.filter(x=>x!==id);
+  saveState();
+  renderPeople();
+  if(currentTab==="draw")renderDraw();
+}
+
+function addPerson(){
+  const inp=$("inp-new");
+  const n=(inp?inp.value:"").trim();
+  if(!n)return;
+  ST.people.push({id:"p_"+Date.now(),name:n});
+  saveState();
+  renderPeople();
+}
+
+function resetAll(){
+  if(!confirm("Azzerare TUTTO? Tutta la storia sarà cancellata per sempre."))return;
+  ST={people:DEFAULT_PEOPLE,stats:{},sessions:[]};
+  selected=[];guestCount=0;
+  saveState();
+  renderAll();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+function renderAll(){
+  renderDraw();
+  if(currentTab==="stats")renderStats();
+  if(currentTab==="people")renderPeople();
+}
+
+renderDraw();
+</script>
+</body>
+</html>
