@@ -17,6 +17,11 @@ input{outline:none;}
 #root{max-width:480px;margin:0 auto;min-height:100vh;position:relative;}
 .screen{padding:0 16px 100px;padding-top:env(safe-area-inset-top,0px);}
 
+/* Group login */
+#group-login{display:flex;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:480px;margin:0 auto;}
+#group-login input{width:100%;background:#fff;border:1.5px solid #EBE5DF;border-radius:12px;padding:14px 16px;font-size:16px;color:#1A1008;margin-bottom:12px;}
+#group-login button{width:100%;background:linear-gradient(135deg,#2C1503,#5C3010);color:#fff;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:800;}
+
 /* Tab bar */
 #tabbar{position:fixed;bottom:0;left:0;right:0;background:rgba(250,247,244,0.95);backdrop-filter:blur(12px);border-top:1px solid #EBE5DF;display:flex;z-index:50;padding-bottom:env(safe-area-inset-bottom,8px);}
 #tabbar button{flex:1;padding:10px 0 6px;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;}
@@ -56,6 +61,10 @@ input{outline:none;}
 .sess-row{display:flex;align-items:center;gap:10px;padding:10px 0;}
 .sess-row+.sess-row{border-top:1px solid #EBE5DF;}
 
+/* Backup row */
+.backup-row{display:flex;align-items:center;gap:10px;padding:10px 0;}
+.backup-row+.backup-row{border-top:1px solid #EBE5DF;}
+
 /* Highlight cards */
 .hilights{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px;}
 .hicard{background:#fff;border-radius:18px;padding:16px;box-shadow:0 2px 12px rgba(44,21,3,0.08);border:1px solid #EBE5DF;flex:1 1 140px;}
@@ -75,44 +84,285 @@ input{outline:none;}
 </head>
 <body>
 <div id="root">
-  <div id="screen-draw" class="screen"></div>
-  <div id="screen-stats" class="screen" style="display:none"></div>
-  <div id="screen-people" class="screen" style="display:none"></div>
-  <div id="tabbar">
-    <button class="active" onclick="showTab('draw')"><span class="icon">☕</span><span class="label">Sorteggio</span></button>
-    <button onclick="showTab('stats')"><span class="icon">🏆</span><span class="label">Classifiche</span></button>
-    <button onclick="showTab('people')"><span class="icon">👤</span><span class="label">Persone</span></button>
+
+  <!-- Group login / switch screen -->
+  <div id="group-login" style="display:none">
+    <div style="font-size:48px;margin-bottom:8px">☕</div>
+    <div style="font-size:24px;font-weight:800;color:#2C1503;margin-bottom:4px;text-align:center">Chi Paga il Caffè?</div>
+    <div style="font-size:14px;color:#6B5B4E;margin-bottom:28px;text-align:center;max-width:320px">Inserisci il nome del tuo ufficio/gruppo e una parola d'ordine. Se non esiste ancora, verrà creato automaticamente.</div>
+    <input id="login-name" placeholder="Nome ufficio (es. Marketing Milano)" autocapitalize="words"/>
+    <input id="login-pass" type="password" placeholder="Parola d'ordine"/>
+    <button onclick="handleLogin()">☕ Entra nel gruppo</button>
+    <div id="login-error" style="color:#D94F38;font-size:13px;margin-top:12px;text-align:center"></div>
+    <div style="font-size:11px;color:#A8978C;margin-top:24px;text-align:center;max-width:300px">
+      Chiunque conosca lo stesso nome e parola d'ordine accede ai tuoi dati condivisi. Usa una combinazione che solo i tuoi colleghi conoscono.
+    </div>
   </div>
-  <div id="overlay">
-    <div id="ov-spin" style="display:none;flex-direction:column;align-items:center;gap:0">
-      <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:32px">estrazione in corso</div>
-      <div class="spin-circle">
-        <div class="spin-name" id="spin-name">...</div>
-        <div class="spin-dot"></div>
+
+  <!-- Main app -->
+  <div id="app-shell" style="display:none">
+    <div id="screen-draw" class="screen"></div>
+    <div id="screen-stats" class="screen" style="display:none"></div>
+    <div id="screen-people" class="screen" style="display:none"></div>
+    <div id="tabbar">
+      <button class="active" onclick="showTab('draw')"><span class="icon">☕</span><span class="label">Sorteggio</span></button>
+      <button onclick="showTab('stats')"><span class="icon">🏆</span><span class="label">Classifiche</span></button>
+      <button onclick="showTab('people')"><span class="icon">👤</span><span class="label">Persone</span></button>
+    </div>
+    <div id="overlay">
+      <div id="ov-spin" style="display:none;flex-direction:column;align-items:center;gap:0">
+        <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:32px">estrazione in corso</div>
+        <div class="spin-circle">
+          <div class="spin-name" id="spin-name">...</div>
+          <div class="spin-dot"></div>
+        </div>
+      </div>
+      <div id="ov-result" style="display:none;flex-direction:column;align-items:center;gap:0;padding:24px">
+        <div style="font-size:56px;margin-bottom:8px">😭</div>
+        <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">il verdetto è...</div>
+        <div id="res-name" style="font-size:48px;font-weight:900;color:#C8782A;text-align:center;padding:16px 32px;border:2px solid #C8782A;border-radius:20px;margin-bottom:16px;max-width:300px"></div>
+        <div id="res-others" style="font-size:16px;color:#C8A88A;text-align:center;margin-bottom:16px;max-width:280px;line-height:1.4"></div>
+        <div id="res-guests" style="display:none;background:rgba(200,120,42,0.15);border-radius:12px;padding:10px 20px;margin-bottom:24px;font-size:14px;color:#D4A070;text-align:center"></div>
+        <div id="res-spacer" style="margin-bottom:24px"></div>
+        <button onclick="confirmPay()" style="background:#C8782A;color:#fff;border:none;border-radius:16px;padding:16px 48px;font-size:17px;font-weight:700;margin-bottom:12px">✅ Confermato, ha pagato!</button>
+        <button onclick="cancelDraw()" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#9A7A60;border-radius:12px;padding:10px 28px;font-size:14px">Annulla</button>
       </div>
     </div>
-    <div id="ov-result" style="display:none;flex-direction:column;align-items:center;gap:0;padding:24px">
-      <div style="font-size:56px;margin-bottom:8px">😭</div>
-      <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">il verdetto è...</div>
-      <div id="res-name" style="font-size:48px;font-weight:900;color:#C8782A;text-align:center;padding:16px 32px;border:2px solid #C8782A;border-radius:20px;margin-bottom:16px;max-width:300px"></div>
-      <div id="res-others" style="font-size:16px;color:#C8A88A;text-align:center;margin-bottom:16px;max-width:280px;line-height:1.4"></div>
-      <div id="res-guests" style="display:none;background:rgba(200,120,42,0.15);border-radius:12px;padding:10px 20px;margin-bottom:24px;font-size:14px;color:#D4A070;text-align:center"></div>
-      <div id="res-spacer" style="margin-bottom:24px"></div>
-      <button onclick="confirmPay()" style="background:#C8782A;color:#fff;border:none;border-radius:16px;padding:16px 48px;font-size:17px;font-weight:700;margin-bottom:12px">✅ Confermato, ha pagato!</button>
-      <button onclick="cancelDraw()" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#9A7A60;border-radius:12px;padding:10px 28px;font-size:14px">Annulla</button>
-    </div>
   </div>
+
 </div>
 
+<input type="file" id="file-import" accept="application/json" style="display:none" onchange="handleImportFile(event)"/>
+
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-const KEY = "caffe-v2";
-function loadState(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch{return null;}}
-function saveState(){try{localStorage.setItem(KEY,JSON.stringify(ST));}catch{}}
+// ── Group / Firebase paths ───────────────────────────────────────────────────
+const FIREBASE_URL = "https://caffe-ufficio-default-rtdb.europe-west1.firebasedatabase.app";
+let GROUP_ID = null;
+let GROUP_NAME = null;
 
+function hashGroupId(name, pass){
+  const str = name.trim().toLowerCase() + "::" + pass;
+  let h1 = 0xdeadbeef ^ str.length, h2 = 0x41c6ce57 ^ str.length;
+  for(let i=0;i<str.length;i++){
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  return (h1>>>0).toString(16) + (h2>>>0).toString(16);
+}
+
+function groupInfoKey(){ return "caffe-group-info"; }
+function loadGroupInfo(){ try{ const r=localStorage.getItem(groupInfoKey()); return r?JSON.parse(r):null; }catch{ return null; } }
+function saveGroupInfo(){ try{ localStorage.setItem(groupInfoKey(), JSON.stringify({groupId:GROUP_ID, groupName:GROUP_NAME})); }catch{} }
+
+function groupPath(){ return "/groups/"+GROUP_ID+".json"; }
+function backupsPath(){ return "/groups/"+GROUP_ID+"/backups.json"; }
+function backupItemPath(ts){ return "/groups/"+GROUP_ID+"/backups/"+ts+".json"; }
+function cacheKey(){ return "caffe-cache-"+GROUP_ID; }
+
+// ── State ─────────────────────────────────────────────────────────────────
 const DEFAULT_PEOPLE=[{id:"1",name:"Marco"},{id:"2",name:"Giulia"},{id:"3",name:"Luca"},{id:"4",name:"Sara"}];
-let ST = loadState() || {people:DEFAULT_PEOPLE,stats:{},sessions:[]};
+function emptyState(){ return {people:JSON.parse(JSON.stringify(DEFAULT_PEOPLE)),stats:{},sessions:[]}; }
 
+let ST = emptyState();
+let isSyncing = false;
+let lastRemoteJSON = "";
+let saveDebounceTimer = null;
+
+function loadLocalCache(){ try{ const r=localStorage.getItem(cacheKey()); return r?JSON.parse(r):null; }catch{ return null; } }
+function saveLocalCache(){ try{ localStorage.setItem(cacheKey(), JSON.stringify(ST)); }catch{} }
+
+function setSyncBadge(status){
+  const el = document.getElementById("sync-badge");
+  if(!el) return;
+  if(status==="ok"){ el.textContent="☁️ Sincronizzato"; el.style.color="#2E8B57"; }
+  else if(status==="syncing"){ el.textContent="🔄 Sincronizzazione..."; el.style.color="#C8782A"; }
+  else if(status==="error"){ el.textContent="⚠️ Offline (dati solo locali)"; el.style.color="#D94F38"; }
+}
+
+async function fetchRemoteState(){
+  try{
+    const res = await fetch(FIREBASE_URL + groupPath(), {cache:"no-store"});
+    if(!res.ok) throw new Error("fetch failed");
+    return await res.json();
+  }catch(e){ return undefined; }
+}
+
+async function pushRemoteState(){
+  try{
+    setSyncBadge("syncing");
+    const res = await fetch(FIREBASE_URL + groupPath(), {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(ST)
+    });
+    if(!res.ok) throw new Error("push failed");
+    lastRemoteJSON = JSON.stringify(ST);
+    setSyncBadge("ok");
+  }catch(e){ setSyncBadge("error"); }
+}
+
+function saveState(){
+  saveLocalCache();
+  clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(pushRemoteState, 250);
+}
+
+async function initSync(){
+  setSyncBadge("syncing");
+  const remote = await fetchRemoteState();
+  if(remote === undefined){ setSyncBadge("error"); return; }
+  if(remote === null){
+    await pushRemoteState();
+  } else {
+    ST = remote;
+    saveLocalCache();
+    lastRemoteJSON = JSON.stringify(ST);
+    renderAll();
+    setSyncBadge("ok");
+  }
+}
+
+setInterval(async ()=>{
+  if(!GROUP_ID || isSyncing) return;
+  isSyncing = true;
+  const remote = await fetchRemoteState();
+  isSyncing = false;
+  if(remote === undefined || remote === null) return;
+  const remoteJSON = JSON.stringify(remote);
+  if(remoteJSON !== lastRemoteJSON){
+    lastRemoteJSON = remoteJSON;
+    ST = remote;
+    saveLocalCache();
+    renderAll();
+    setSyncBadge("ok");
+  }
+}, 4000);
+
+// ── Cloud backups (automatic, kept after each draw / deletion) ─────────────
+const MAX_BACKUPS = 20;
+
+async function pushBackupSnapshot(){
+  if(!GROUP_ID) return;
+  const ts = Date.now();
+  const snapshot = {people:ST.people, stats:ST.stats, sessions:ST.sessions, savedAt:new Date().toISOString()};
+  try{
+    await fetch(FIREBASE_URL+backupItemPath(ts), {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(snapshot)});
+    pruneOldBackups();
+  }catch(e){}
+}
+
+async function pruneOldBackups(){
+  try{
+    const res = await fetch(FIREBASE_URL+backupsPath(), {cache:"no-store"});
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data) return;
+    const keys = Object.keys(data).sort((a,b)=>Number(a)-Number(b));
+    if(keys.length>MAX_BACKUPS){
+      const toDelete = keys.slice(0, keys.length-MAX_BACKUPS);
+      for(const k of toDelete){
+        await fetch(FIREBASE_URL+backupItemPath(k), {method:"DELETE"});
+      }
+    }
+  }catch(e){}
+}
+
+async function listBackups(){
+  try{
+    const res = await fetch(FIREBASE_URL+backupsPath(), {cache:"no-store"});
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!data) return [];
+    return Object.keys(data).map(k=>({ts:k, ...data[k]})).sort((a,b)=>Number(b.ts)-Number(a.ts));
+  }catch(e){ return []; }
+}
+
+async function restoreCloudBackup(ts){
+  if(!confirm("Vuoi ripristinare questo backup? I dati attuali del gruppo verranno sovrascritti per tutti.")) return;
+  try{
+    const res = await fetch(FIREBASE_URL+backupItemPath(ts), {cache:"no-store"});
+    const snap = await res.json();
+    if(!snap){ alert("Backup non trovato."); return; }
+    ST = {people: snap.people||DEFAULT_PEOPLE, stats: snap.stats||{}, sessions: snap.sessions||[]};
+    saveLocalCache();
+    await pushRemoteState();
+    renderAll();
+    alert("Backup ripristinato con successo!");
+  }catch(e){ alert("Errore nel ripristino del backup."); }
+}
+
+// ── Manual export / import (local file) ─────────────────────────────────────
+function exportBackup(){
+  const payload = {exportedAt:new Date().toISOString(), groupName:GROUP_NAME, people:ST.people, stats:ST.stats, sessions:ST.sessions};
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "caffe-backup-"+(GROUP_NAME||"gruppo").replace(/\s+/g,"_")+"-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function triggerImport(){ $("file-import").click(); }
+
+function handleImportFile(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e)=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.people || !data.sessions) throw new Error("formato non valido");
+      if(!confirm("Vuoi importare questo backup? I dati attuali del gruppo verranno sovrascritti per tutti.")) return;
+      ST = {people:data.people, stats:data.stats||{}, sessions:data.sessions};
+      saveLocalCache();
+      await pushRemoteState();
+      renderAll();
+      alert("Backup importato con successo!");
+    }catch(err){
+      alert("Il file non è un backup valido.");
+    }
+    ev.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+// ── Group login flow ─────────────────────────────────────────────────────────
+function handleLogin(){
+  const name = $("login-name").value.trim();
+  const pass = $("login-pass").value.trim();
+  $("login-error").textContent = "";
+  if(!name || !pass){ $("login-error").textContent = "Inserisci sia il nome che la parola d'ordine."; return; }
+  GROUP_ID = hashGroupId(name, pass);
+  GROUP_NAME = name;
+  saveGroupInfo();
+  showApp();
+}
+
+function leaveGroup(){
+  if(!confirm("Vuoi uscire da questo gruppo? Per accedervi di nuovo dovrai reinserire nome e parola d'ordine.")) return;
+  try{ localStorage.removeItem(groupInfoKey()); }catch{}
+  location.reload();
+}
+
+function showLogin(){
+  $("group-login").style.display = "flex";
+  $("app-shell").style.display = "none";
+}
+
+function showApp(){
+  $("group-login").style.display = "none";
+  $("app-shell").style.display = "block";
+  ST = loadLocalCache() || emptyState();
+  lastRemoteJSON = JSON.stringify(ST);
+  renderDraw();
+  initSync();
+}
+
+// ── Runtime state ────────────────────────────────────────────────────────────
 let selected = [];
 let guestCount = 0;
 let currentWinner = null;
@@ -123,6 +373,7 @@ let currentTab = "draw";
 function $(id){return document.getElementById(id);}
 function personName(id){const p=ST.people.find(x=>x.id===id);return p?p.name:"?";}
 function daysSince(d){if(!d)return null;return Math.floor((Date.now()-new Date(d).getTime())/86400000);}
+function fmtDate(d){ return d.toLocaleDateString("it-IT")+" "+d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}); }
 
 const AVATAR_COLORS=["#E8C5A0","#B5D4C8","#C8B5D4","#D4C8B5","#B5C8D4","#D4B5C8"];
 function avatarColor(name){return AVATAR_COLORS[name.charCodeAt(0)%AVATAR_COLORS.length];}
@@ -172,6 +423,7 @@ function deleteSession(sid){
   }
   ST.sessions=ST.sessions.filter(s=>s.id!==sid);
   saveState();
+  pushBackupSnapshot();
   renderAll();
 }
 
@@ -195,6 +447,8 @@ function renderDraw(){
   <div style="padding-top:20px;padding-bottom:8px;text-align:center">
     <div style="font-size:13px;color:#A8978C;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px">il rituale quotidiano</div>
     <div style="font-size:28px;font-weight:800;color:#2C1503;letter-spacing:-0.5px">Chi Paga il Caffè?</div>
+    <div style="font-size:12px;color:#6B5B4E;margin-top:6px">🏢 ${GROUP_NAME||""}</div>
+    <div id="sync-badge" style="font-size:11px;font-weight:600;margin-top:4px;color:#A8978C">🔄 Sincronizzazione...</div>
   </div>
   <div style="margin-top:20px">
     <div class="section-label">Chi è presente oggi?</div>
@@ -222,7 +476,6 @@ function renderDraw(){
     </div>
   </div>`;
 
-  // Guest counter
   if(selected.length>=1){
     const sub=guestCount===0?"Nessun ospite — tocca + per aggiungere":`${guestCount} caffè extra divisi tra i ${selected.length} presenti`;
     html+=`<div class="card" style="border:1.5px solid ${guestCount>0?"#C8782A":"#EBE5DF"}">
@@ -241,12 +494,10 @@ function renderDraw(){
     </div>`;
   }
 
-  // CTA
   const ready=selected.length>=2;
   const label=ready?`☕ Estrai tra ${selected.length} persone${guestCount>0?` + ${guestCount} ospiti`:""}` :"Seleziona almeno 2 persone";
   html+=`<button id="cta" class="${ready?"ready":""}" onclick="startDraw()">${label}</button>`;
 
-  // Last session
   if(ST.sessions[0]){
     const s=ST.sessions[0];
     const pn=personName(s.payer);
@@ -362,6 +613,7 @@ function confirmPay(){
   });
   if(ST.sessions.length>100)ST.sessions.pop();
   saveState();
+  pushBackupSnapshot();
   $("overlay").classList.remove("show");
   selected=[];
   guestCount=0;
@@ -504,9 +756,57 @@ function renderPeople(){
     <input id="inp-new" placeholder="Nome nuovo membro..." onkeydown="if(event.key==='Enter')addPerson()"/>
     <button onclick="addPerson()" style="background:#2C1503;color:#fff;border:none;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:600">+</button>
   </div>
-  <button onclick="resetAll()" style="margin-top:32px;width:100%;background:transparent;border:1px solid #F5C5BB;color:#D94F38;border-radius:12px;padding:12px;font-size:14px">🗑 Azzera tutta la storia</button>
+
+  <div class="section-label" style="margin-top:32px">🗄 Backup &amp; Ripristino</div>
+  <div class="card">
+    <div style="font-size:13px;color:#6B5B4E;margin-bottom:12px">Ad ogni estrazione viene salvato automaticamente un backup sul cloud (ultimi ${MAX_BACKUPS}). Puoi anche scaricare o caricare un file manualmente.</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <button onclick="exportBackup()" style="flex:1;background:#F5E6D3;color:#C8782A;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:600">📥 Scarica file</button>
+      <button onclick="triggerImport()" style="flex:1;background:#F5E6D3;color:#C8782A;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:600">📤 Carica file</button>
+    </div>
+  </div>
+  <div id="cloud-backups-list" class="card">
+    <div style="font-size:13px;color:#A8978C">Caricamento backup cloud...</div>
+  </div>
+
+  <div class="section-label" style="margin-top:32px">🏢 Gruppo</div>
+  <div class="card" style="display:flex;align-items:center;gap:12px">
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700;color:#1A1008">${GROUP_NAME||""}</div>
+      <div style="font-size:11px;color:#A8978C;margin-top:1px">Tutti quelli con lo stesso nome e parola d'ordine vedono questi dati</div>
+    </div>
+    <button onclick="leaveGroup()" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;flex-shrink:0">Cambia</button>
+  </div>
+
+  <button onclick="resetAll()" style="margin-top:20px;width:100%;background:transparent;border:1px solid #F5C5BB;color:#D94F38;border-radius:12px;padding:12px;font-size:14px">🗑 Azzera tutta la storia</button>
   </div>`;
   el.innerHTML=html;
+
+  renderCloudBackupsList();
+}
+
+async function renderCloudBackupsList(){
+  const container = $("cloud-backups-list");
+  if(!container) return;
+  const backups = await listBackups();
+  if(!container) return; // tab may have changed while awaiting
+  if(backups.length===0){
+    container.innerHTML = `<div style="font-size:13px;color:#A8978C">Nessun backup cloud ancora. Verrà creato automaticamente dopo la prossima estrazione.</div>`;
+    return;
+  }
+  let html = `<div class="section-label" style="margin-bottom:8px">Backup cloud disponibili</div>`;
+  backups.forEach(b=>{
+    const d = new Date(Number(b.ts));
+    const count = (b.sessions||[]).length;
+    html += `<div class="backup-row">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#1A1008">${fmtDate(d)}</div>
+        <div style="font-size:11px;color:#A8978C">${count} sessioni registrate</div>
+      </div>
+      <button onclick="restoreCloudBackup('${b.ts}')" style="background:#F5E6D3;color:#C8782A;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;flex-shrink:0">Ripristina</button>
+    </div>`;
+  });
+  container.innerHTML = html;
 }
 
 function startEdit(id){
@@ -539,11 +839,13 @@ function addPerson(){
 }
 
 function resetAll(){
-  if(!confirm("Azzerare TUTTO? Tutta la storia sarà cancellata per sempre."))return;
-  ST={people:DEFAULT_PEOPLE,stats:{},sessions:[]};
-  selected=[];guestCount=0;
-  saveState();
-  renderAll();
+  if(!confirm("Azzerare TUTTO? Tutta la storia di questo gruppo sarà cancellata per sempre (i backup cloud rimarranno disponibili)."))return;
+  pushBackupSnapshot().then(()=>{
+    ST=emptyState();
+    selected=[];guestCount=0;
+    saveState();
+    renderAll();
+  });
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
@@ -553,7 +855,17 @@ function renderAll(){
   if(currentTab==="people")renderPeople();
 }
 
-renderDraw();
+// ── Startup ──────────────────────────────────────────────────────────────────
+(function start(){
+  const saved = loadGroupInfo();
+  if(saved && saved.groupId){
+    GROUP_ID = saved.groupId;
+    GROUP_NAME = saved.groupName;
+    showApp();
+  } else {
+    showLogin();
+  }
+})();
 </script>
 </body>
 </html>
