@@ -166,6 +166,27 @@ function cacheKey(){ return "caffe-cache-"+GROUP_ID; }
 const DEFAULT_PEOPLE=[{id:"1",name:"Marco"},{id:"2",name:"Giulia"},{id:"3",name:"Luca"},{id:"4",name:"Sara"}];
 function emptyState(){ return {people:JSON.parse(JSON.stringify(DEFAULT_PEOPLE)),stats:{},sessions:[]}; }
 
+// Firebase può trasformare gli array in oggetti (o eliminare voci): qui riportiamo sempre
+// la struttura a {people:[], stats:{}, sessions:[]} per evitare crash nel rendering.
+function toArray(v){
+  if(Array.isArray(v)) return v.filter(x=>x!=null);
+  if(v && typeof v==="object") return Object.keys(v).sort((a,b)=>Number(a)-Number(b)).map(k=>v[k]).filter(x=>x!=null);
+  return [];
+}
+function normalizeState(s){
+  if(!s || typeof s!=="object") return emptyState();
+  const people = toArray(s.people);
+  const sessions = toArray(s.sessions);
+  const stats = (s.stats && typeof s.stats==="object" && !Array.isArray(s.stats)) ? s.stats : {};
+  // normalizza i participants dentro ogni sessione
+  sessions.forEach(se=>{ if(se) se.participants = toArray(se.participants); });
+  return {
+    people: people.length ? people : JSON.parse(JSON.stringify(DEFAULT_PEOPLE)),
+    stats: stats,
+    sessions: sessions
+  };
+}
+
 let ST = emptyState();
 let isSyncing = false;
 let lastRemoteJSON = "";
@@ -215,7 +236,7 @@ async function initSync(){
   if(remote === null){
     await pushRemoteState();
   } else {
-    ST = remote;
+    ST = normalizeState(remote);
     saveLocalCache();
     lastRemoteJSON = JSON.stringify(ST);
     renderAll();
@@ -232,7 +253,7 @@ setInterval(async ()=>{
   const remoteJSON = JSON.stringify(remote);
   if(remoteJSON !== lastRemoteJSON){
     lastRemoteJSON = remoteJSON;
-    ST = remote;
+    ST = normalizeState(remote);
     saveLocalCache();
     renderAll();
     setSyncBadge("ok");
@@ -284,7 +305,7 @@ async function restoreCloudBackup(ts){
     const res = await fetch(FIREBASE_URL+backupItemPath(ts), {cache:"no-store"});
     const snap = await res.json();
     if(!snap){ alert("Backup non trovato."); return; }
-    ST = {people: snap.people||DEFAULT_PEOPLE, stats: snap.stats||{}, sessions: snap.sessions||[]};
+    ST = normalizeState({people: snap.people||DEFAULT_PEOPLE, stats: snap.stats||{}, sessions: snap.sessions||[]});
     saveLocalCache();
     await pushRemoteState();
     renderAll();
@@ -317,7 +338,7 @@ function handleImportFile(ev){
       const data = JSON.parse(e.target.result);
       if(!data.people || !data.sessions) throw new Error("formato non valido");
       if(!confirm("Vuoi importare questo backup? I dati attuali del gruppo verranno sovrascritti per tutti.")) return;
-      ST = {people:data.people, stats:data.stats||{}, sessions:data.sessions};
+      ST = normalizeState({people:data.people, stats:data.stats||{}, sessions:data.sessions});
       saveLocalCache();
       await pushRemoteState();
       renderAll();
@@ -356,7 +377,7 @@ function showLogin(){
 function showApp(){
   $("group-login").style.display = "none";
   $("app-shell").style.display = "block";
-  ST = loadLocalCache() || emptyState();
+  ST = normalizeState(loadLocalCache() || emptyState());
   lastRemoteJSON = JSON.stringify(ST);
   renderDraw();
   initSync();
@@ -850,9 +871,21 @@ function resetAll(){
 
 // ── Init ───────────────────────────────────────────────────────────────────
 function renderAll(){
-  renderDraw();
-  if(currentTab==="stats")renderStats();
-  if(currentTab==="people")renderPeople();
+  try{
+    renderDraw();
+    if(currentTab==="stats")renderStats();
+    if(currentTab==="people")renderPeople();
+  }catch(e){
+    // Se i dati erano malformati, normalizziamo e riproviamo una volta sola.
+    try{
+      ST = normalizeState(ST);
+      renderDraw();
+      if(currentTab==="stats")renderStats();
+      if(currentTab==="people")renderPeople();
+    }catch(e2){
+      console.error("Render error:", e2);
+    }
+  }
 }
 
 // ── Startup ──────────────────────────────────────────────────────────────────
