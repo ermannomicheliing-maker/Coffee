@@ -119,6 +119,7 @@ input{outline:none;}
           <div class="spin-dot"></div>
         </div>
       </div>
+      <div id="ov-manual" style="display:none;flex-direction:column;align-items:center;gap:0;padding:24px"></div>
       <div id="ov-result" style="display:none;flex-direction:column;align-items:center;gap:0;padding:24px">
         <div style="font-size:56px;margin-bottom:8px">😭</div>
         <div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px">il verdetto è...</div>
@@ -542,6 +543,10 @@ function renderDraw(){
   const label=ready?`☕ Estrai tra ${selected.length} persone${guestCount>0?` + ${guestCount} ospiti`:""}` :"Seleziona almeno 2 persone";
   html+=`<button id="cta" class="${ready?"ready":""}" onclick="startDraw()">${label}</button>`;
 
+  if(selected.length>=1){
+    html+=`<button onclick="openManualPicker()" style="width:100%;margin-top:10px;background:#fff;border:1.5px solid #EBE5DF;color:#6B5B4E;border-radius:14px;padding:13px;font-size:14px;font-weight:600">✋ Ha pagato qualcuno (senza sorteggio)</button>`;
+  }
+
   if(ST.sessions[0]){
     const s=ST.sessions[0];
     const pn=personName(s.payer);
@@ -550,7 +555,7 @@ function renderDraw(){
     html+=`<div style="margin-top:16px;background:#FAF7F4;border-radius:14px;padding:12px 14px;border:1px solid #EBE5DF;display:flex;align-items:center;gap:10px">
       <span style="font-size:20px">🕐</span>
       <div style="flex:1">
-        <div style="font-size:12px;color:#A8978C">Ultima volta · ${s.date} ${s.time}</div>
+        <div style="font-size:12px;color:#A8978C">Ultima volta · ${s.date} ${s.time}${s.manual?" · ✋ manuale":""}</div>
         <div style="font-size:14px;color:#1A1008;font-weight:600;margin-top:1px">${pn} ha offerto ${tot} caffè${gc>0?` <span style="font-weight:400;color:#A8978C">(di cui ${gc} ospiti)</span>`:""}</div>
       </div>
       <button onclick="askDelete('${s.id}')" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600">↩ Annulla</button>
@@ -652,8 +657,8 @@ function showResult(){
   $("ov-result").style.display="flex";
 }
 
-function confirmPay(){
-  const winnerId=currentWinner;
+// Registra una sessione: aggiorna i conteggi e salva. manual=true se scelto a mano.
+function recordPayment(payerId, manual){
   const count=selected.length;
   const guests=guestCount;
   const now=new Date().toISOString();
@@ -663,15 +668,17 @@ function confirmPay(){
     ST.stats[id].taken++;
     ST.stats[id].takenFrac=(ST.stats[id].takenFrac||0)+1+share;
   });
-  ST.stats[winnerId].paidRounds++;
-  ST.stats[winnerId].paidFrac=(ST.stats[winnerId].paidFrac||0)+count+guests;
-  ST.stats[winnerId].lastPaidSession=now;
+  if(!ST.stats[payerId])ST.stats[payerId]={taken:0,paidRounds:0,takenFrac:0,paidFrac:0,lastPaidSession:null};
+  ST.stats[payerId].paidRounds++;
+  ST.stats[payerId].paidFrac=(ST.stats[payerId].paidFrac||0)+count+guests;
+  ST.stats[payerId].lastPaidSession=now;
   ST.sessions.unshift({
     id:now,
     date:new Date().toLocaleDateString("it-IT"),
     time:new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}),
-    participants:[...selected],payer:winnerId,
-    count,guestCount:guests,totalCoffees:count+guests
+    participants:[...selected],payer:payerId,
+    count,guestCount:guests,totalCoffees:count+guests,
+    manual: manual===true
   });
   if(ST.sessions.length>100)ST.sessions.pop();
   saveState();
@@ -683,9 +690,54 @@ function confirmPay(){
   renderDraw();
 }
 
+function confirmPay(){
+  recordPayment(currentWinner, false);
+}
+
+// ── Assegnazione manuale ────────────────────────────────────────────────────
+function openManualPicker(){
+  if(selected.length<1)return;
+  let html=`<div style="font-size:13px;color:#9A7A60;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px">chi ha pagato?</div>
+  <div style="font-size:14px;color:#C8A88A;text-align:center;margin-bottom:24px;max-width:300px">Scegli chi ha offerto: verr\u00e0 registrato senza sorteggio.</div>
+  <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow-y:auto">`;
+  selected.forEach(id=>{
+    const nm=personName(id);
+    const s=ST.stats[id]||{};
+    const bal=personBalance(s);
+    const balTxt=bal<0?`deve ${Math.abs(bal)}`:bal>0?`credito ${bal}`:"in pari";
+    html+=`<button onclick="pickManualPayer('${id}')" style="display:flex;align-items:center;gap:10px;width:100%;background:rgba(255,255,255,0.07);border:1.5px solid rgba(200,120,42,0.4);border-radius:14px;padding:12px 14px;text-align:left">
+      ${avatarHTML(nm,36,false)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;color:#FAF7F4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</div>
+        <div style="font-size:11px;color:#9A7A60;margin-top:1px">${balTxt}</div>
+      </div>
+    </button>`;
+  });
+  html+=`</div>
+  <button onclick="closeManualPicker()" style="margin-top:20px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#9A7A60;border-radius:12px;padding:10px 28px;font-size:14px">Annulla</button>`;
+  $("ov-manual").innerHTML=html;
+  $("ov-spin").style.display="none";
+  $("ov-result").style.display="none";
+  $("ov-manual").style.display="flex";
+  $("overlay").classList.add("show");
+}
+
+function closeManualPicker(){
+  $("overlay").classList.remove("show");
+  $("ov-manual").style.display="none";
+}
+
+function pickManualPayer(id){
+  const tot=selected.length+guestCount;
+  if(!confirm(`Registrare che ${personName(id)} ha pagato ${tot} caff\u00e8?`))return;
+  $("ov-manual").style.display="none";
+  recordPayment(id, true);
+}
+
 function cancelDraw(){
   clearTimeout(spinTimer);
   $("overlay").classList.remove("show");
+  $("ov-manual").style.display="none";
 }
 
 // ── Stats Screen ───────────────────────────────────────────────────────────
@@ -775,7 +827,7 @@ function renderStats(){
       <div style="flex:1;min-width:0">
         <span style="font-weight:700;color:#1A1008;font-size:14px">${pn}</span>
         <span style="color:#6B5B4E;font-size:14px"> → ${others}</span>
-        <div style="font-size:11px;color:#A8978C;margin-top:1px">${s.date} · ${s.time}${gc>0?` · <span style="color:#C8782A">+${gc} ospiti</span>`:""}</div>
+        <div style="font-size:11px;color:#A8978C;margin-top:1px">${s.date} · ${s.time}${gc>0?` · <span style="color:#C8782A">+${gc} ospiti</span>`:""}${s.manual?` · <span style="color:#6B5B4E">✋ manuale</span>`:""}</div>
       </div>
       <button onclick="askDeleteStats('${s.id}','${pn}','${others}')" style="background:#FEF0EC;color:#D94F38;border:none;border-radius:8px;padding:5px 10px;font-size:13px;flex-shrink:0">↩</button>
     </div>`;
